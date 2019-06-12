@@ -66,28 +66,65 @@ ProcessPointClouds<PointT>::SegmentPlane(typename pcl::PointCloud<PointT>::Ptr c
 {
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
-    // DONE:: Fill in this function to find inliers for the cloud.
-    // taken from PCL segmentation example (with some modification):
-    // http://pointclouds.org/documentation/tutorials/extract_indices.php#extract-indices
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients ());
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices ());
-    // Create the segmentation object
-    pcl::SACSegmentation<pcl::PointXYZ> seg;
-    // Optional
-    seg.setOptimizeCoefficients(true);
-    // Mandatory
-    seg.setModelType(pcl::SACMODEL_PLANE);
-    seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setMaxIterations(maxIterations);
-    seg.setDistanceThreshold(distanceThreshold);
-    // Segment the largest planar component from the point cloud
-    seg.setInputCloud(cloud);
-    seg.segment(*inliers, *coefficients);
-    if (inliers->indices.size() == 0)
+
+    std::vector<float> bestParams = { 0.0, 0.0, 1.0, 0.0 };
+    int mostInliers = 0;
+
+	// For max iterations 
+    do
     {
-        std::cerr << "Could not estimate a planar model for the given dataset." << std::endl;
+        // Randomly sample subset and fit line
+        auto p_i = cloud->points[rand() % cloud->size()];
+        auto p_j = cloud->points[rand() % cloud->size()];
+        auto p_k = cloud->points[rand() % cloud->size()];
+        Eigen::Vector3f v_i = p_i.getVector3fMap();
+        Eigen::Vector3f v_j = p_j.getVector3fMap();
+        Eigen::Vector3f v_k = p_k.getVector3fMap();
+        Eigen::Vector3f v_ij = v_j - v_i;
+        Eigen::Vector3f v_ik = v_k = v_i;
+        Eigen::Vector3f normal = v_ij.cross(v_ik);
+        auto d = normal.norm();
+        if (d < 0.0000001) continue;
+        normal /= d;
+        auto f = [normal](pcl::PointXYZ p) -> float {
+            return normal.adjoint() * p.getVector3fMap();
+        };
+        auto c = f(p_i);
+        int n = 0;
+        // Measure distance between every point and fitted line
+        for (auto p: cloud->points)
+        {
+            float e = std::abs(f(p) - c);
+            // If distance is smaller than threshold count it as inlier
+            if (e < distanceThreshold) ++n;
+        }
+        if (n > mostInliers)
+        {
+            mostInliers = n;
+            bestParams[0] = normal[0];
+            bestParams[1] = normal[1];
+            bestParams[2] = normal[2];
+            bestParams[3] = c;
+        }
+    }
+    while (--maxIterations);
+
+    Eigen::Vector3f normal(bestParams[0], bestParams[1], bestParams[2]);
+    float c = bestParams[3];
+    auto f = [normal, c](pcl::PointXYZ p) -> float {
+        return std::abs(normal.adjoint() * p.getVector3fMap() - c);
+    };
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices ());
+    for (size_t k = 0; k < cloud->size(); ++k) {
+        auto p_k = cloud->points[k];
+        auto e = f(p_k);
+        // If distance is smaller than threshold count it as inlier
+        if (e < distanceThreshold)
+            inliers->indices.push_back(int(k));
     }
 
+    if (inliers->indices.size() == 0)
+        std::cerr << "Could not estimate a planar model for the given dataset." << std::endl;
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "plane segmentation took " << elapsedTime.count() << " milliseconds" << std::endl;
