@@ -37,32 +37,20 @@ struct KdTree
         {
             Node* cur = root;
             Node* nxt = cur;
-            bool vert = true; // split vertically
+            int split_type = 0;
             while (true)
             {
                 bool left;
-                if (vert)
-                    if (point[0] <= cur->point[0])
-                    {
-                        nxt = cur->left;
-                        left = true;
-                    }
-                    else
-                    {
-                        nxt = cur->right;
-                        left = false;
-                    }
+                if (point[split_type] <= cur->point[split_type])
+                {
+                    nxt = cur->left;
+                    left = true;
+                }
                 else
-                    if (point[1] <= cur->point[1])
-                    {
-                        nxt = cur->left;
-                        left = true;
-                    }
-                    else
-                    {
-                        nxt = cur->right;
-                        left = false;
-                    }
+                {
+                    nxt = cur->right;
+                    left = false;
+                }
                 if (nxt == nullptr)
                 {
                     if (left)
@@ -72,7 +60,7 @@ struct KdTree
                     break;
                 }
                 cur = nxt;
-                vert = !vert;
+                split_type = (split_type + 1) % point.size();
             }
         }
 	}
