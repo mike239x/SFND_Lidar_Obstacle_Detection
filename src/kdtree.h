@@ -4,50 +4,46 @@
 // Structure to represent node of kd tree
 struct Node
 {
-	std::vector<float> point;
-	int id;
-	Node* left;
-	Node* right;
+    std::vector<float> point;
+    int id;
+    Node* left;
+    Node* right;
 
-	Node(std::vector<float> arr, int setId)
-	:	point(arr), id(setId), left(NULL), right(NULL)
-	{}
+    Node(std::vector<float> arr, int setId) : point(arr), id(setId), left(NULL), right(NULL) {}
 };
 
 struct KdTree
 {
-	Node* root;
+    Node* root;
 
-	KdTree()
-	: root(NULL)
-	{}
+    KdTree() : root(NULL) {}
 
     // TODO constructor with points provided (sort those, take mid point, and so on)
 
-	void insert(std::vector<float> point, int id)
-	{
-		// DONE: Fill in this function to insert a new point into the tree
-		// the function should create a new node and place correctly with in the root 
+    void insert(std::vector<float> point, int id)
+    {
+        // DONE: Fill in this function to insert a new point into the tree
+        // the function should create a new node and place correctly with in the root
         if (root == nullptr)
         {
             root = new Node(point, id);
         }
         else
         {
-            Node* cur = root;
-            Node* nxt = cur;
+            Node* cur      = root;
+            Node* nxt      = cur;
             int split_type = 0;
             while (true)
             {
                 bool left;
                 if (point[split_type] <= cur->point[split_type])
                 {
-                    nxt = cur->left;
+                    nxt  = cur->left;
                     left = true;
                 }
                 else
                 {
-                    nxt = cur->right;
+                    nxt  = cur->right;
                     left = false;
                 }
                 if (nxt == nullptr)
@@ -58,23 +54,22 @@ struct KdTree
                         cur->right = new Node(point, id);
                     break;
                 }
-                cur = nxt;
+                cur        = nxt;
                 split_type = (split_type + 1) % point.size();
             }
         }
-	}
+    }
 
-	// return a list of point ids in the tree that are within distance of target
-	std::vector<int> search(std::vector<float> target, float distanceTol)
-	{
-        auto dist = [](std::vector<float> a, std::vector<float> b) -> float
-        {
+    // return a list of point ids in the tree that are within distance of target
+    std::vector<int> search(std::vector<float> target, float distanceTol)
+    {
+        auto dist = [](std::vector<float> a, std::vector<float> b) -> float {
             float d = 0.0;
             for (size_t i = 0; i < a.size(); ++i)
-                d += (a[i]-b[i])*(a[i]-b[i]);
+                d += (a[i] - b[i]) * (a[i] - b[i]);
             return std::sqrt(d);
         };
-		std::vector<int> ids;
+        std::vector<int> ids;
         std::vector<Node*> branches;
         std::vector<int> split_types;
         branches.push_back(root);
@@ -108,9 +103,6 @@ struct KdTree
                 }
             }
         }
-		return ids;
-	}
-	
-
+        return ids;
+    }
 };
-
