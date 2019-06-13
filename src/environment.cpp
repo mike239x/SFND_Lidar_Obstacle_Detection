@@ -82,12 +82,12 @@ void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer, ProcessPointCloud
     auto filterCloud = pointProcessor.FilterCloud(
             inputCloud,
             voxel_size,
-            Eigen::Vector4f(-30, -30, -30, 1),
-            Eigen::Vector4f(30, 30, 30, 1));
-    auto seg = pointProcessor.SegmentPlane(filterCloud, 100, 0.2);
+            Eigen::Vector4f(-30, -20, -100, 1),
+            Eigen::Vector4f(30, 20, 100, 1));
+    auto seg = pointProcessor.SegmentPlane(filterCloud, 200, 0.2);
     renderPointCloud(viewer, seg.second, "plane", Color(0.5,0.5,0.5));
 
-    auto cloudClusters = pointProcessor.Clustering(seg.first, voxel_size * 2.4, 20, 10000);
+    auto cloudClusters = pointProcessor.Clustering(seg.first, voxel_size * 2.2, 20, 10000);
 
     int clusterId = 0;
     std::vector<Color> colors = {Color(1,0.5,0.5), Color(0.5,1,0.5), Color(0.5,0.5,1)};
@@ -95,11 +95,15 @@ void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer, ProcessPointCloud
     for(auto cluster : cloudClusters)
     {
         auto color = colors[clusterId % colors.size()];
-        renderPointCloud(viewer,cluster,"obstCloud"+std::to_string(clusterId), color);
         if (cluster->size() < 400)
         {
+            renderPointCloud(viewer,cluster,"obstCloud"+std::to_string(clusterId), color);
             Box box = pointProcessor.BoundingBox(cluster);
-            renderBox(viewer, box, clusterId, color);
+            renderBox(viewer, box, clusterId, color, 0.3);
+        }
+        else
+        {
+            renderPointCloud(viewer,cluster,"obstCloud"+std::to_string(clusterId), Color(1,1,1));
         }
         ++clusterId;
     }
