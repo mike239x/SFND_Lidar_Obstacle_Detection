@@ -1,7 +1,7 @@
 // PCL lib Functions for processing point clouds 
 
 #include "processPointClouds.h"
-
+#include "kdtree.h"
 
 //constructor:
 template<typename PointT>
@@ -142,26 +142,51 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::C
     auto startTime = std::chrono::steady_clock::now();
 
     std::vector<typename pcl::PointCloud<PointT>::Ptr> clusters;
-    // DONE:: Fill in the function to perform euclidean clustering to group detected obstacles
 
-    // Creating the KdTree object for the search method of the extraction
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-    tree->setInputCloud(cloud);
-
-    std::vector<pcl::PointIndices> cluster_indices;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    ec.setClusterTolerance(clusterTolerance);
-    ec.setMinClusterSize(minSize);
-    ec.setMaxClusterSize(maxSize);
-    ec.setSearchMethod(tree);
-    ec.setInputCloud(cloud);
-    ec.extract(cluster_indices);
-
-    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+    KdTree tree;
+    std::vector<std::vector<float> > points;
+    for (size_t k = 0; k < cloud->size(); ++k)
     {
+        auto p = cloud->points[k];
+        std::vector<float> p_coords = { p.x, p.y, p.z };
+        points.push_back(p_coords);
+        tree.insert(p_coords, k);
+    }
+
+	std::vector<std::vector<int>> cluster_ids;
+
+    std::vector<bool> processed(points.size(), false);
+
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        if (processed[i]) continue;
+        std::vector<int> indices;
+        indices.push_back(i);
+        size_t k = 0;
+        while (k < indices.size())
+        {
+            int index = indices[k];
+            processed[index] = true;
+            auto neighbours = tree.search(points[index], clusterTolerance);
+            for (int n_indx: neighbours)
+                if (!processed[n_indx])
+                {
+                    indices.push_back(n_indx);
+                    processed[n_indx] = true;
+                }
+            ++k;
+        }
+        cluster_ids.push_back(std::move(indices));
+    }
+
+    for (auto cluster : cluster_ids)
+    {
+        if (cluster.size() < minSize) continue;
         pcl::ExtractIndices<pcl::PointXYZ> extract;
         extract.setInputCloud(cloud);
-        auto indices_ptr = pcl::PointIndices::Ptr( new pcl::PointIndices(*it));
+        auto indices_ptr = pcl::PointIndices::Ptr( new pcl::PointIndices());
+        for (auto index : cluster)
+            indices_ptr->indices.push_back(index);
         extract.setIndices(indices_ptr);
         extract.setNegative(false);
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);

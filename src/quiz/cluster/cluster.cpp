@@ -97,7 +97,10 @@ std::vector<std::vector<int>> euclideanCluster(const std::vector<std::vector<flo
             auto neighbours = tree->search(points[index], distanceTol);
             for (int n_indx: neighbours)
                 if (!processed[n_indx])
+                {
                     indices.push_back(n_indx);
+                    processed[n_indx] = true;
+                }
             ++k;
         }
         clusters.push_back(std::move(indices));
