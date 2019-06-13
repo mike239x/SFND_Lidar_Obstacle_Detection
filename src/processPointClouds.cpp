@@ -27,13 +27,34 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
 
-    // TODO:: Fill in the function to do voxel grid point reduction and region based filtering
+    // DONE: Fill in the function to do voxel grid point reduction and region based filtering
+    // Create the filtering object
+    pcl::CropBox<PointT> crop;
+    crop.setInputCloud(cloud);
+    crop.setMin(minPoint);
+    crop.setMax(maxPoint);
+    typename pcl::PointCloud<PointT>::Ptr cloud_cropped ( new pcl::PointCloud<PointT> );
+    crop.filter(*cloud_cropped);
+
+    // now crop the roof:
+    crop.setInputCloud(cloud_cropped);
+    crop.setMin(Eigen::Vector4f(-2.5, -1.5, -10 ,1));
+    crop.setMax(Eigen::Vector4f(2.6, 1.5, 10, 1));
+    // typename pcl::PointCloud<PointT>::Ptr cloud_cropped ( new pcl::PointCloud<PointT> );
+    crop.setNegative(true);
+    crop.filter(*cloud_cropped);
+
+    pcl::VoxelGrid<PointT> sor;
+    sor.setInputCloud (cloud_cropped);
+    sor.setLeafSize (filterRes, filterRes, filterRes);
+    typename pcl::PointCloud<PointT>::Ptr cloud_filtered ( new pcl::PointCloud<PointT> );
+    sor.filter(*cloud_filtered);
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return cloud;
+    return cloud_filtered;
 
 }
 
@@ -43,9 +64,9 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 ProcessPointClouds<PointT>::SeparateClouds(pcl::PointIndices::Ptr inliers, typename pcl::PointCloud<PointT>::Ptr cloud) 
 {
     // DONE: Create two new point clouds, one cloud with obstacles and other with segmented plane
-    pcl::PointCloud<pcl::PointXYZ>::Ptr plane(new pcl::PointCloud<pcl::PointXYZ>), rest(new pcl::PointCloud<pcl::PointXYZ>);
+    typename pcl::PointCloud<PointT>::Ptr plane(new pcl::PointCloud<PointT>), rest(new pcl::PointCloud<PointT>);
     // Create the filtering object
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
+    pcl::ExtractIndices<PointT> extract;
     // Extract the inliers
     extract.setInputCloud(cloud);
     extract.setIndices(inliers);
@@ -81,12 +102,12 @@ ProcessPointClouds<PointT>::SegmentPlane(typename pcl::PointCloud<PointT>::Ptr c
         Eigen::Vector3f v_j = p_j.getVector3fMap();
         Eigen::Vector3f v_k = p_k.getVector3fMap();
         Eigen::Vector3f v_ij = v_j - v_i;
-        Eigen::Vector3f v_ik = v_k = v_i;
+        Eigen::Vector3f v_ik = v_k - v_i;
         Eigen::Vector3f normal = v_ij.cross(v_ik);
         auto d = normal.norm();
         if (d < 0.0000001) continue;
         normal /= d;
-        auto f = [normal](pcl::PointXYZ p) -> float {
+        auto f = [normal](PointT p) -> float {
             return normal.adjoint() * p.getVector3fMap();
         };
         auto c = f(p_i);
@@ -111,7 +132,7 @@ ProcessPointClouds<PointT>::SegmentPlane(typename pcl::PointCloud<PointT>::Ptr c
 
     Eigen::Vector3f normal(bestParams[0], bestParams[1], bestParams[2]);
     float c = bestParams[3];
-    auto f = [normal, c](pcl::PointXYZ p) -> float {
+    auto f = [normal, c](PointT p) -> float {
         return std::abs(normal.adjoint() * p.getVector3fMap() - c);
     };
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices ());
@@ -182,14 +203,14 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::C
     for (auto cluster : cluster_ids)
     {
         if (cluster.size() < minSize) continue;
-        pcl::ExtractIndices<pcl::PointXYZ> extract;
+        pcl::ExtractIndices<PointT> extract;
         extract.setInputCloud(cloud);
         auto indices_ptr = pcl::PointIndices::Ptr( new pcl::PointIndices());
         for (auto index : cluster)
             indices_ptr->indices.push_back(index);
         extract.setIndices(indices_ptr);
         extract.setNegative(false);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+        typename pcl::PointCloud<PointT>::Ptr cloud_cluster (new pcl::PointCloud<PointT>);
         extract.filter(*cloud_cluster);
         clusters.push_back(cloud_cluster);
     }

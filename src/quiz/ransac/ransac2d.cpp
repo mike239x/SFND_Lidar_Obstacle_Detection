@@ -138,7 +138,7 @@ std::unordered_set<int> RansacPlane(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, i
         Eigen::Vector3f v_j = p_j.getVector3fMap();
         Eigen::Vector3f v_k = p_k.getVector3fMap();
         Eigen::Vector3f v_ij = v_j - v_i;
-        Eigen::Vector3f v_ik = v_k = v_i;
+        Eigen::Vector3f v_ik = v_k - v_i;
         Eigen::Vector3f normal = v_ij.cross(v_ik);
         auto d = normal.norm();
         if (d < 0.0000001) continue;
