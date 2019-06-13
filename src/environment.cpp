@@ -46,8 +46,8 @@ simpleHighway(pcl::visualization::PCLVisualizer::Ptr& viewer)
     std::vector<Car> cars = initHighway(renderScene, viewer);
 
     // DONE:: Create lidar sensor
-    auto lidar = new Lidar(cars, 0.0);
-    auto scan  = lidar->scan(); // pcl::PointCloud<pcl::PointXYZ>::Ptr
+    Lidar lidar(cars, 0.0);
+    auto scan = lidar.scan(); // pcl::PointCloud<pcl::PointXYZ>::Ptr
     // renderRays(viewer, lidar->position, scan);
     // renderPointCloud(viewer, scan, "lidar scan", Color(1,0.5,0.5)); // nice rose color ^.^
 
@@ -57,9 +57,10 @@ simpleHighway(pcl::visualization::PCLVisualizer::Ptr& viewer)
     // renderPointCloud(viewer, seg.first, "rest", Color(1,0.5,0.5));
     renderPointCloud(viewer, seg.second, "plane", Color(0.5, 0.5, 0.5));
 
-    auto cloudClusters = pointProcessor.Clustering(seg.first, 1.0, 3, 30);
+    auto cloudClusters = pointProcessor.Clustering(seg.first, 1.0);
 
-    int clusterId             = 0;
+    int clusterId = 0;
+
     std::vector<Color> colors = {Color(1, 0.5, 0.5), Color(0.5, 1, 0.5), Color(0.5, 0.5, 1)};
 
     for (auto cluster : cloudClusters)
@@ -82,27 +83,30 @@ cityBlock(
     // -----Open 3D viewer and display City Block     -----
     // ----------------------------------------------------
 
-    float voxel_size = 0.5;
-    auto filterCloud = pointProcessor.FilterCloud(
+    float voxel_size = 0.2;
+    auto cloud       = pointProcessor.FilterCloud(
         inputCloud, voxel_size, Eigen::Vector4f(-30, -20, -100, 1), Eigen::Vector4f(30, 20, 100, 1));
-    auto seg = pointProcessor.SegmentPlane(filterCloud, 200, 0.2);
-    renderPointCloud(viewer, seg.second, "plane", Color(0.5, 0.5, 0.5));
+    auto seg   = pointProcessor.SegmentPlane(cloud, 200, 0.3);
+    auto rest  = seg.first;
+    auto plane = seg.second;
 
-    auto cloudClusters = pointProcessor.Clustering(seg.first, voxel_size * 2.2, 20, 10000);
+    renderPointCloud(viewer, plane, "plane", Color(0.2, 0.2, 0.2));
 
-    int clusterId             = 0;
+    auto clusters = pointProcessor.Clustering(seg.first, voxel_size * 2.3);
+
     std::vector<Color> colors = {Color(1, 0.5, 0.5), Color(0.5, 1, 0.5), Color(0.5, 0.5, 1)};
 
-    for (auto cluster : cloudClusters)
+    int clusterId = 0;
+    for (auto cluster : clusters)
     {
         auto color = colors[clusterId % colors.size()];
-        if (cluster->size() < 400)
+        if (cluster->size() < 600 && cluster->size() > 10) // color & box reasonably sized clusters
         {
             renderPointCloud(viewer, cluster, "obstCloud" + std::to_string(clusterId), color);
             Box box = pointProcessor.BoundingBox(cluster);
             renderBox(viewer, box, clusterId, color, 0.3);
         }
-        else
+        else // draw in white everything else
         {
             renderPointCloud(viewer, cluster, "obstCloud" + std::to_string(clusterId), Color(1, 1, 1));
         }

@@ -24,40 +24,61 @@ ProcessPointClouds<PointT>::numPoints(typename pcl::PointCloud<PointT>::Ptr clou
 
 template <typename PointT>
 typename pcl::PointCloud<PointT>::Ptr
-ProcessPointClouds<PointT>::FilterCloud(
-    typename pcl::PointCloud<PointT>::Ptr cloud, float filterRes, Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint)
+ProcessPointClouds<PointT>::Crop(
+    typename pcl::PointCloud<PointT>::Ptr cloud, Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint)
 {
-    // Time segmentation process
-    auto startTime = std::chrono::steady_clock::now();
-
-    // DONE: Fill in the function to do voxel grid point reduction and region based filtering
-    // Create the filtering object
     pcl::CropBox<PointT> crop;
     crop.setInputCloud(cloud);
     crop.setMin(minPoint);
     crop.setMax(maxPoint);
     typename pcl::PointCloud<PointT>::Ptr cloud_cropped(new pcl::PointCloud<PointT>);
     crop.filter(*cloud_cropped);
+    return cloud_cropped;
+}
 
-    // now crop the roof:
-    crop.setInputCloud(cloud_cropped);
+template <typename PointT>
+typename pcl::PointCloud<PointT>::Ptr
+ProcessPointClouds<PointT>::RemoveCarTop(typename pcl::PointCloud<PointT>::Ptr cloud)
+{
+    pcl::CropBox<PointT> crop;
+    crop.setInputCloud(cloud);
     crop.setMin(Eigen::Vector4f(-2.5, -1.5, -10, 1));
     crop.setMax(Eigen::Vector4f(2.6, 1.5, 10, 1));
-    // typename pcl::PointCloud<PointT>::Ptr cloud_cropped ( new pcl::PointCloud<PointT> );
+    typename pcl::PointCloud<PointT>::Ptr cloud_cropped(new pcl::PointCloud<PointT>);
     crop.setNegative(true);
     crop.filter(*cloud_cropped);
+    return cloud_cropped;
+}
 
+template <typename PointT>
+typename pcl::PointCloud<PointT>::Ptr
+ProcessPointClouds<PointT>::DownSample(typename pcl::PointCloud<PointT>::Ptr cloud, float voxelSize)
+{
     pcl::VoxelGrid<PointT> sor;
-    sor.setInputCloud(cloud_cropped);
-    sor.setLeafSize(filterRes, filterRes, filterRes);
+    sor.setInputCloud(cloud);
+    sor.setLeafSize(voxelSize, voxelSize, voxelSize);
     typename pcl::PointCloud<PointT>::Ptr cloud_filtered(new pcl::PointCloud<PointT>);
     sor.filter(*cloud_filtered);
+    return cloud_filtered;
+}
+
+template <typename PointT>
+typename pcl::PointCloud<PointT>::Ptr
+ProcessPointClouds<PointT>::FilterCloud(
+    typename pcl::PointCloud<PointT>::Ptr cloud, float filterRes, Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint)
+{
+    // Time segmentation process
+    auto startTime = std::chrono::steady_clock::now();
+
+    auto cloud_cropped = Crop(cloud, minPoint, maxPoint);
+    cloud_cropped      = RemoveCarTop(cloud_cropped);
+    auto cloud_ds      = DownSample(cloud_cropped, filterRes);
 
     auto endTime     = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return cloud_filtered;
+    return cloud_ds;
 }
 
 template <typename PointT>
@@ -89,16 +110,19 @@ ProcessPointClouds<PointT>::SegmentPlane(
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
 
+    auto cloud_ds = DownSample(cloud, 1.0);
+    // find the coeffs for the road on downsampled point cloud
     std::vector<float> bestParams = {0.0, 0.0, 1.0, 0.0};
     int mostInliers               = 0;
+    size_t size                   = cloud_ds->size();
 
     // For max iterations
     do
     {
         // Randomly sample subset and fit line
-        auto p_i               = cloud->points[rand() % cloud->size()];
-        auto p_j               = cloud->points[rand() % cloud->size()];
-        auto p_k               = cloud->points[rand() % cloud->size()];
+        auto p_i               = cloud_ds->points[rand() % size];
+        auto p_j               = cloud_ds->points[rand() % size];
+        auto p_k               = cloud_ds->points[rand() % size];
         Eigen::Vector3f v_i    = p_i.getVector3fMap();
         Eigen::Vector3f v_j    = p_j.getVector3fMap();
         Eigen::Vector3f v_k    = p_k.getVector3fMap();
@@ -113,7 +137,7 @@ ProcessPointClouds<PointT>::SegmentPlane(
         auto c = f(p_i);
         int n  = 0;
         // Measure distance between every point and fitted line
-        for (auto p : cloud->points)
+        for (auto p : cloud_ds->points)
         {
             float e = std::abs(f(p) - c);
             // If distance is smaller than threshold count it as inlier
@@ -130,6 +154,7 @@ ProcessPointClouds<PointT>::SegmentPlane(
         }
     } while (--maxIterations);
 
+    // segment out the plane for the full point cloud:
     Eigen::Vector3f normal(bestParams[0], bestParams[1], bestParams[2]);
     float c = bestParams[3];
     auto f  = [normal, c](PointT p) -> float { return std::abs(normal.adjoint() * p.getVector3fMap() - c); };
@@ -156,23 +181,33 @@ ProcessPointClouds<PointT>::SegmentPlane(
 
 template <typename PointT>
 std::vector<typename pcl::PointCloud<PointT>::Ptr>
-ProcessPointClouds<PointT>::Clustering(
-    typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance, int minSize, int maxSize)
+ProcessPointClouds<PointT>::Clustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance)
 {
     // Time clustering process
     auto startTime = std::chrono::steady_clock::now();
 
     std::vector<typename pcl::PointCloud<PointT>::Ptr> clusters;
 
-    KdTree tree;
     std::vector<std::vector<float> > points;
     for (size_t k = 0; k < cloud->size(); ++k)
     {
         auto p                      = cloud->points[k];
         std::vector<float> p_coords = {p.x, p.y, p.z};
         points.push_back(p_coords);
-        tree.insert(p_coords, k);
     }
+    KdTree tree(points);
+    auto midTime = std::chrono::steady_clock::now();
+
+    std::function<int(Node*)> depth = [&depth](Node* n) -> int {
+        if (n == nullptr)
+            return 0;
+        if (n->left == nullptr)
+            return 1 + depth(n->right);
+        return std::max(depth(n->left), depth(n->right)) + 1;
+    };
+
+    std::cout << "number of points in the tree: " << cloud->size() << std::endl;
+    std::cout << "depth of the tree: " << depth(tree.root) << std::endl;
 
     std::vector<std::vector<int> > cluster_ids;
 
@@ -203,8 +238,6 @@ ProcessPointClouds<PointT>::Clustering(
 
     for (auto cluster : cluster_ids)
     {
-        if (cluster.size() < minSize)
-            continue;
         pcl::ExtractIndices<PointT> extract;
         extract.setInputCloud(cloud);
         auto indices_ptr = pcl::PointIndices::Ptr(new pcl::PointIndices());
@@ -219,8 +252,10 @@ ProcessPointClouds<PointT>::Clustering(
 
     auto endTime     = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    auto cosntrTime  = std::chrono::duration_cast<std::chrono::milliseconds>(midTime - startTime);
     std::cout << "clustering took " << elapsedTime.count() << " milliseconds and found " << clusters.size()
               << " clusters" << std::endl;
+    std::cout << "tree consrt took " << cosntrTime.count() << " milliseconds" << std::endl;
 
     return clusters;
 }

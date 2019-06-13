@@ -1,3 +1,5 @@
+#ifndef KDTREE_H_
+#define KDTREE_H_
 /* \author Aaron Brown */
 // from the Quiz on implementing kd tree
 
@@ -9,16 +11,27 @@ struct Node
     Node* left;
     Node* right;
 
-    Node(std::vector<float> arr, int setId) : point(arr), id(setId), left(NULL), right(NULL) {}
+    Node(std::vector<float> arr, int setId) : point(arr), id(setId), left(nullptr), right(nullptr) {}
+    ~Node()
+    {
+        delete left;
+        delete right;
+    }
 };
 
 struct KdTree
 {
     Node* root;
 
-    KdTree() : root(NULL) {}
+    KdTree() : root(nullptr) {}
 
-    // TODO constructor with points provided (sort those, take mid point, and so on)
+    ~KdTree() { delete root; }
+
+    KdTree(std::vector<std::vector<float> >& points) : root(nullptr)
+    {
+        for (size_t i = 0; i < points.size(); ++i)
+            insert(points[i], i);
+    }
 
     void insert(std::vector<float> point, int id)
     {
@@ -63,11 +76,11 @@ struct KdTree
     // return a list of point ids in the tree that are within distance of target
     std::vector<int> search(std::vector<float> target, float distanceTol)
     {
-        auto dist = [](std::vector<float> a, std::vector<float> b) -> float {
+        auto is_inlier = [distanceTol, target](std::vector<float> a) -> bool {
             float d = 0.0;
-            for (size_t i = 0; i < a.size(); ++i)
-                d += (a[i] - b[i]) * (a[i] - b[i]);
-            return std::sqrt(d);
+            for (size_t i = 0; i < target.size(); ++i)
+                d += (a[i] - target[i]) * (a[i] - target[i]);
+            return d < distanceTol * distanceTol;
         };
         std::vector<int> ids;
         std::vector<Node*> branches;
@@ -80,29 +93,26 @@ struct KdTree
             branches.pop_back();
             int split_type = split_types.back();
             split_types.pop_back();
+            if (is_inlier(node->point))
+                ids.push_back(node->id);
+            float d = node->point[split_type] - target[split_type];
+            // positive d means target is to the left of the current point
+            int next_split_type = (split_type + 1) % target.size();
+            if (d < distanceTol && node->right != nullptr)
             {
-                float d = dist(node->point, target);
-                if (d < distanceTol)
-                    ids.push_back(node->id);
+                // add right branch to the search
+                branches.push_back(node->right);
+                split_types.push_back(next_split_type);
             }
+            if (d > -distanceTol && node->left != nullptr)
             {
-                float d = node->point[split_type] - target[split_type];
-                // positive d means target is to the left of the current point
-                int next_split_type = (split_type + 1) % target.size();
-                if (d < distanceTol && node->right != nullptr)
-                {
-                    // add right branch to the search
-                    branches.push_back(node->right);
-                    split_types.push_back(next_split_type);
-                }
-                if (d > -distanceTol && node->left != nullptr)
-                {
-                    // add left branch to the search
-                    branches.push_back(node->left);
-                    split_types.push_back(next_split_type);
-                }
+                // add left branch to the search
+                branches.push_back(node->left);
+                split_types.push_back(next_split_type);
             }
         }
         return ids;
     }
 };
+
+#endif

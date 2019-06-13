@@ -30,6 +30,13 @@ public:
 
     void numPoints(typename pcl::PointCloud<PointT>::Ptr cloud);
 
+    typename pcl::PointCloud<PointT>::Ptr
+    Crop(typename pcl::PointCloud<PointT>::Ptr cloud, Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint);
+
+    typename pcl::PointCloud<PointT>::Ptr RemoveCarTop(typename pcl::PointCloud<PointT>::Ptr cloud);
+
+    typename pcl::PointCloud<PointT>::Ptr DownSample(typename pcl::PointCloud<PointT>::Ptr cloud, float voxelSize);
+
     typename pcl::PointCloud<PointT>::Ptr FilterCloud(
         typename pcl::PointCloud<PointT>::Ptr cloud,
         float filterRes,
@@ -43,7 +50,7 @@ public:
     SegmentPlane(typename pcl::PointCloud<PointT>::Ptr cloud, int maxIterations, float distanceThreshold);
 
     std::vector<typename pcl::PointCloud<PointT>::Ptr>
-    Clustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance, int minSize, int maxSize);
+    Clustering(typename pcl::PointCloud<PointT>::Ptr cloud, float clusterTolerance);
 
     Box BoundingBox(typename pcl::PointCloud<PointT>::Ptr cluster);
 
