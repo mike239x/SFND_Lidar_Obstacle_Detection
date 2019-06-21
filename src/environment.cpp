@@ -53,7 +53,7 @@ simpleHighway(pcl::visualization::PCLVisualizer::Ptr& viewer)
 
     // DONE:: Create point processor
     ProcessPointClouds<pcl::PointXYZ> pointProcessor;
-    auto seg = pointProcessor.SegmentPlane(scan, 1000, 0.2);
+    auto seg = pointProcessor.SegmentPlane(scan, 100, 0.2);
     // renderPointCloud(viewer, seg.first, "rest", Color(1,0.5,0.5));
     renderPointCloud(viewer, seg.second, "plane", Color(0.5, 0.5, 0.5));
 
@@ -85,7 +85,7 @@ cityBlock(
 
     float voxel_size = 0.2;
     auto cloud       = pointProcessor.FilterCloud(
-        inputCloud, voxel_size, Eigen::Vector4f(-30, -20, -100, 1), Eigen::Vector4f(30, 20, 100, 1));
+        inputCloud, voxel_size, Eigen::Vector4f(-20, -5, -100, 1), Eigen::Vector4f(20, 5, 100, 1));
     auto seg   = pointProcessor.SegmentPlane(cloud, 200, 0.3);
     auto rest  = seg.first;
     auto plane = seg.second;
